@@ -803,11 +803,15 @@ function Clash订阅配置文件热补丁(Clash_原始订阅内容, uuid = null,
     - 208.67.220.220
   fallback-filter:
     geoip: true
-    domain: [+.google.com, +.facebook.com, +.youtube.com]
+    geoip-code: CN
     ipcidr:
       - 240.0.0.0/4
+      - 127.0.0.1/32
       - 0.0.0.0/32
-    geoip-code: CN
+    domain:
+      - '+.google.com'
+      - '+.facebook.com'
+      - '+.youtube.com'
 `;
 
     // 检查是否存在 dns: 字段（可能在任意行，行首无缩进）
@@ -1508,9 +1512,16 @@ async function 读取config_JSON(env, hostname, userID, 重置配置 = false) {
 }
 
 async function 生成随机IP(request, count = 16, 指定端口 = -1) {
-    const asnMap = { '9808': 'cmcc', '4837': 'cu', '17623': 'cu', '4134': 'ct' }, asn = request.cf.asn;
-    const cidr_url = asnMap[asn] ? `https://raw.githubusercontent.com/cmliu/cmliu/main/CF-CIDR/${asnMap[asn]}.txt` : 'https://raw.githubusercontent.com/cmliu/cmliu/main/CF-CIDR.txt';
-    const cfname = { '9808': 'CF移动优选', '4837': 'CF联通优选', '17623': 'CF联通优选', '4134': 'CF电信优选' }[asn] || 'CF官方优选';
+    const ISP配置 = {
+        '9808':  { file: 'cmcc', name: 'CF移动优选' },
+        '4837':  { file: 'cu',   name: 'CF联通优选' },
+        '17623': { file: 'cu',   name: 'CF联通优选' },
+        '17816': { file: 'cu',   name: 'CF联通优选' },
+        '4134':  { file: 'ct',   name: 'CF电信优选' },
+    };
+    const asn = request.cf.asn, isp = ISP配置[asn];
+    const cidr_url = isp ? `https://raw.githubusercontent.com/cmliu/cmliu/main/CF-CIDR/${isp.file}.txt` : 'https://raw.githubusercontent.com/cmliu/cmliu/main/CF-CIDR.txt';
+    const cfname = isp?.name || 'CF官方优选';
     const cfport = [443, 2053, 2083, 2087, 2096, 8443];
     let cidrList = [];
     try { const res = await fetch(cidr_url); cidrList = res.ok ? await 整理成数组(await res.text()) : ['104.16.0.0/13']; } catch { cidrList = ['104.16.0.0/13']; }
@@ -1688,7 +1699,7 @@ async function 反代参数获取(request) {
     启用SOCKS5全局反代 = searchParams.has('globalproxy') || false;
 
     // 统一处理反代IP参数 (优先级最高,使用正则一次匹配)
-    const proxyMatch = pathLower.match(/\/(proxyip[.=]|pyip=|ip=)(.+)/);
+    const proxyMatch = pathLower.match(/\/(proxyip[.=]|pyip=|ip=)([^/?]+)/);
     if (searchParams.has('proxyip')) {
         const 路参IP = searchParams.get('proxyip');
         反代IP = 路参IP.includes(',') ? 路参IP.split(',')[Math.floor(Math.random() * 路参IP.split(',').length)] : 路参IP;
@@ -1703,10 +1714,10 @@ async function 反代参数获取(request) {
 
     // 处理SOCKS5/HTTP代理参数
     let socksMatch;
-    if ((socksMatch = pathname.match(/\/(socks5?|http):\/?\/?(.+)/i))) {
+    if ((socksMatch = pathname.match(/\/(socks5?|http):\/?\/?([^/?#]+)/i))) {
         // 格式: /socks5://... 或 /http://...
         启用SOCKS5反代 = socksMatch[1].toLowerCase() === 'http' ? 'http' : 'socks5';
-        我的SOCKS5账号 = socksMatch[2].split('#')[0];
+        我的SOCKS5账号 = socksMatch[2];
         启用SOCKS5全局反代 = true;
 
         // 处理Base64编码的用户名密码
@@ -1718,7 +1729,7 @@ async function 反代参数获取(request) {
             }
             我的SOCKS5账号 = `${userPassword}@${我的SOCKS5账号.substring(atIndex + 1)}`;
         }
-    } else if ((socksMatch = pathname.match(/\/(g?s5|socks5|g?http)=(.+)/i))) {
+    } else if ((socksMatch = pathname.match(/\/(g?s5|socks5|g?http)=([^/?#]+)/i))) {
         // 格式: /socks5=... 或 /s5=... 或 /gs5=... 或 /http=... 或 /ghttp=...
         const type = socksMatch[1].toLowerCase();
         我的SOCKS5账号 = socksMatch[2];
